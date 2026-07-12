@@ -45,3 +45,7 @@ export { buildGoogleRequest, parseGoogleResponse } from './adapters/google.js';
 
 // Env helper — exported so callers can use it for their own key resolution
 export { readEnv } from './env.js';
+
+// Cloudflare AI Gateway auth-header helper — pure, zero-dependency; usable
+// by raw-SDK/raw-fetch callers that don't go through runWithFallback.
+export { buildAigAuthHeader } from './gateway.js';
