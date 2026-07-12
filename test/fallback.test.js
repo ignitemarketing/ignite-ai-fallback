@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { runWithFallback } from '../dist/index.js';
+import { runWithFallback, buildAigAuthHeader } from '../dist/index.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -458,6 +458,131 @@ describe('runWithFallback — extraHeaders', () => {
     );
 
     assert.equal(capturedHeaders['x-api-key'], 'secret-key');
+  });
+});
+
+describe('runWithFallback — CF AI Gateway auth (gatewayToken)', () => {
+  const GATEWAY = 'https://gateway.ai.cloudflare.com/v1/acct/gw';
+
+  it('attaches cf-aig-authorization on a gateway-routed step', async () => {
+    let capturedHeaders;
+    const fetchImpl = async (_url, init) => {
+      capturedHeaders = init.headers;
+      return jsonResponse(ANTHROPIC_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'anthropic', model: 'claude-haiku' }],
+      makeRequest(),
+      { keys: { anthropic: 'k' }, gatewayBase: GATEWAY, gatewayToken: 'raw-token', fetchImpl },
+    );
+
+    assert.equal(capturedHeaders['cf-aig-authorization'], 'Bearer raw-token');
+  });
+
+  it('is ABSENT on a zai-glm step even when gatewayBase + gatewayToken are set', async () => {
+    let capturedHeaders;
+    const fetchImpl = async (_url, init) => {
+      capturedHeaders = init.headers;
+      return jsonResponse(ZAI_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'zai-glm', model: 'glm-4.6' }],
+      makeRequest(),
+      { keys: { 'zai-glm': 'k' }, gatewayBase: GATEWAY, gatewayToken: 'raw-token', fetchImpl },
+    );
+
+    assert.equal(capturedHeaders['cf-aig-authorization'], undefined);
+  });
+
+  it('is ABSENT when gatewayBase is unset, even with a gatewayToken', async () => {
+    let capturedHeaders;
+    const fetchImpl = async (_url, init) => {
+      capturedHeaders = init.headers;
+      return jsonResponse(ANTHROPIC_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'anthropic', model: 'claude-haiku' }],
+      makeRequest(),
+      { keys: { anthropic: 'k' }, gatewayToken: 'raw-token', fetchImpl },
+    );
+
+    assert.equal(capturedHeaders['cf-aig-authorization'], undefined);
+  });
+
+  it('does not double-prefix a token that already starts with "Bearer "', async () => {
+    let capturedHeaders;
+    const fetchImpl = async (_url, init) => {
+      capturedHeaders = init.headers;
+      return jsonResponse(ANTHROPIC_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'anthropic', model: 'claude-haiku' }],
+      makeRequest(),
+      {
+        keys: { anthropic: 'k' },
+        gatewayBase: GATEWAY,
+        gatewayToken: 'Bearer already-prefixed',
+        fetchImpl,
+      },
+    );
+
+    assert.equal(capturedHeaders['cf-aig-authorization'], 'Bearer already-prefixed');
+  });
+
+  it('gatewayToken takes precedence over a conflicting extraHeaders value', async () => {
+    let capturedHeaders;
+    const fetchImpl = async (_url, init) => {
+      capturedHeaders = init.headers;
+      return jsonResponse(ANTHROPIC_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'anthropic', model: 'claude-haiku' }],
+      makeRequest(),
+      {
+        keys: { anthropic: 'k' },
+        gatewayBase: GATEWAY,
+        gatewayToken: 'winning-token',
+        extraHeaders: { 'cf-aig-authorization': 'Bearer attacker-value' },
+        fetchImpl,
+      },
+    );
+
+    assert.equal(capturedHeaders['cf-aig-authorization'], 'Bearer winning-token');
+  });
+});
+
+describe('buildAigAuthHeader', () => {
+  it('returns {} for undefined', () => {
+    assert.deepEqual(buildAigAuthHeader(undefined), {});
+  });
+
+  it('returns {} for null', () => {
+    assert.deepEqual(buildAigAuthHeader(null), {});
+  });
+
+  it('returns {} for an empty string', () => {
+    assert.deepEqual(buildAigAuthHeader(''), {});
+  });
+
+  it('prefixes a raw token with "Bearer "', () => {
+    assert.deepEqual(buildAigAuthHeader('abc123'), { 'cf-aig-authorization': 'Bearer abc123' });
+  });
+
+  it('does not double-prefix an already-prefixed token', () => {
+    assert.deepEqual(buildAigAuthHeader('Bearer abc123'), {
+      'cf-aig-authorization': 'Bearer abc123',
+    });
+  });
+
+  it('does not double-prefix case-insensitively', () => {
+    assert.deepEqual(buildAigAuthHeader('bearer abc123'), {
+      'cf-aig-authorization': 'bearer abc123',
+    });
   });
 });
 

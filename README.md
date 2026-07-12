@@ -90,6 +90,40 @@ const result = await runWithFallback(chain, request, {
 
 zai-glm ignores `gatewayBase` and always calls `https://open.bigmodel.cn/api/paas/v4` directly.
 
+### Gateway auth (`gatewayToken`)
+
+If your CF AI Gateway has **Authenticated Gateway** enabled, set `opts.gatewayToken` to the raw token. The package sends it as:
+
+```
+cf-aig-authorization: Bearer <token>
+```
+
+```ts
+const result = await runWithFallback(chain, request, {
+  gatewayBase: process.env.CF_AI_GATEWAY_BASE,
+  gatewayToken: process.env.CF_AI_GATEWAY_TOKEN,
+});
+```
+
+Rules:
+
+- **Per-step scoped.** The header is attached ONLY on steps that actually route through the gateway (`gatewayBase` set for that call **and** the provider is gateway-supported). It is never sent on a zai-glm step (always bypasses the gateway) or on any step when `gatewayBase` is unset — this keeps the account-wide gateway token from leaking to third-party endpoints (e.g. `api.z.ai`) or direct provider calls.
+- **`Bearer ` prefix is added for you.** Pass the raw token; if it's already prefixed with `Bearer ` (case-insensitive), it's used as-is.
+- **Precedence over `extraHeaders`.** If you also set `extraHeaders['cf-aig-authorization']`, `gatewayToken`'s computed header wins.
+
+For raw-SDK or raw-`fetch` callers that don't use `runWithFallback` (e.g. calling the CF AI Gateway directly from another repo), the header-building logic is exported standalone:
+
+```ts
+import { buildAigAuthHeader } from '@ignitemarketing/ai-fallback';
+
+const headers = {
+  'Content-Type': 'application/json',
+  ...buildAigAuthHeader(process.env.CF_AI_GATEWAY_TOKEN),
+};
+```
+
+`buildAigAuthHeader` is a pure, zero-dependency function: returns `{}` for a falsy token, otherwise `{ 'cf-aig-authorization': 'Bearer <token>' }` (same no-double-prefix rule).
+
 ---
 
 ## API key resolution

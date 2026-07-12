@@ -122,4 +122,25 @@ export interface FallbackOptions {
    * Harmless to direct providers — unknown headers are ignored.
    */
   extraHeaders?: Record<string, string>;
+
+  /**
+   * Raw Cloudflare AI Gateway auth token (from a gateway with "Authenticated
+   * Gateway" enabled). When set AND the step routes through the gateway
+   * (gatewayBase is set for that step and the provider is gateway-supported —
+   * see GATEWAY_SLUGS), the package sends:
+   *   cf-aig-authorization: Bearer <token>
+   * The package adds the `Bearer ` prefix itself — pass the raw token, not
+   * an already-prefixed value (a `Bearer `-prefixed token is also accepted
+   * without double-prefixing, so pre-formatted values are safe too).
+   *
+   * Scoped per-step: NEVER attached to a step that bypasses the gateway
+   * (zai-glm always bypasses it; any provider bypasses it when gatewayBase
+   * is unset for that call). This keeps the account-wide gateway credential
+   * from leaking to third-party endpoints (e.g. api.z.ai) or direct
+   * provider calls.
+   *
+   * Precedence: if `extraHeaders` also sets `cf-aig-authorization`,
+   * `gatewayToken`'s computed header wins.
+   */
+  gatewayToken?: string;
 }

@@ -6,6 +6,7 @@ import type {
   Provider,
 } from './types.js';
 import { readEnv } from './env.js';
+import { buildAigAuthHeader } from './gateway.js';
 import { buildAnthropicRequest, parseAnthropicResponse } from './adapters/anthropic.js';
 import { buildOpenAIRequest, parseOpenAIResponse } from './adapters/openai.js';
 import { buildGoogleRequest, parseGoogleResponse } from './adapters/google.js';
@@ -97,6 +98,20 @@ function getBaseUrl(provider: Provider, gatewayBase?: string): string {
 }
 
 /**
+ * True when `provider` actually routes through the CF AI Gateway for the
+ * given `gatewayBase` — i.e. `gatewayBase` is set AND the provider has a
+ * gateway slug (see GATEWAY_SLUGS; zai-glm never does, since CF has no
+ * native z.ai provider).
+ *
+ * Used to scope `opts.gatewayToken`'s cf-aig-authorization header to only
+ * the steps that actually hit the gateway, so the token never leaks to
+ * direct provider calls or third-party endpoints (e.g. api.z.ai).
+ */
+function isGatewayRouted(provider: Provider, gatewayBase?: string): boolean {
+  return Boolean(gatewayBase) && GATEWAY_SLUGS[provider] !== undefined;
+}
+
+/**
  * Returns true for HTTP status codes that warrant trying the next provider:
  *   - 429  Too Many Requests / rate limit
  *   - 5xx  Server errors (overload, maintenance, transient failures)
@@ -165,11 +180,25 @@ export async function runWithFallback(
     const { build, parse } = ADAPTERS[step.provider];
     const { url, init } = build(request, step.model, apiKey, baseUrl);
 
+    // CF AI Gateway auth header — attached ONLY when this specific step
+    // routes through the gateway. Never blanket-merged into extraHeaders:
+    // that would leak an account-wide gateway token to steps that bypass
+    // the gateway entirely (zai-glm → api.z.ai; any provider when
+    // gatewayBase is unset).
+    const aigHeaders = isGatewayRouted(step.provider, opts?.gatewayBase)
+      ? buildAigAuthHeader(opts?.gatewayToken)
+      : {};
+
     // Merge caller-supplied extra headers (e.g. CF AI Gateway metadata tags)
-    // UNDER the adapter's own headers, so adapter auth/content-type always win.
-    const headers = opts?.extraHeaders
-      ? { ...opts.extraHeaders, ...(init.headers as Record<string, string>) }
-      : init.headers;
+    // UNDER the gateway-token header UNDER the adapter's own headers, so:
+    //   - gatewayToken's cf-aig-authorization wins over an extraHeaders
+    //     value for the same key (R6 precedence)
+    //   - adapter auth/content-type headers always win over both
+    const headers = {
+      ...opts?.extraHeaders,
+      ...aigHeaders,
+      ...(init.headers as Record<string, string>),
+    };
 
     let response: Response;
     try {
