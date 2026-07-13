@@ -24,7 +24,8 @@
 export function buildAigAuthHeader(
   token: string | undefined | null,
 ): Record<string, string> {
-  if (!token) return {};
-  const value = /^bearer\s/i.test(token) ? token : `Bearer ${token}`;
+  const trimmed = token?.trim();
+  if (!trimmed || /^bearer\s*$/i.test(trimmed)) return {};
+  const value = /^bearer\s/i.test(trimmed) ? trimmed : `Bearer ${trimmed}`;
   return { 'cf-aig-authorization': value };
 }

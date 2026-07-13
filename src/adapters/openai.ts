@@ -58,7 +58,7 @@ function normalizeContent(content: MessageContent): unknown {
  * Auth:     Authorization: Bearer {apiKey}
  *
  * This function is ALSO used by the 'zai-glm' provider, which is OpenAI-compatible.
- * The only difference is the base URL (https://open.bigmodel.cn/api/paas/v4 by default).
+ * The only difference is the base URL (https://api.z.ai/api/paas/v4 by default).
  *
  * Gateway slug (when CF AI Gateway is configured): "openai"
  * → {gatewayBase}/openai/chat/completions
@@ -70,6 +70,28 @@ export function buildOpenAIRequest(
   model: string,
   apiKey: string,
   baseUrl: string,
+): { url: string; init: RequestInit } {
+  const normalizedKey = apiKey?.trim();
+  if (!normalizedKey) {
+    throw new TypeError('OpenAI-compatible API key must be a non-empty string');
+  }
+  return buildOpenAIRequestInternal(request, model, baseUrl, normalizedKey);
+}
+
+/** @internal Builds a request whose provider key is supplied by CF AI Gateway BYOK. */
+export function buildOpenAIByokRequest(
+  request: ChatRequest,
+  model: string,
+  baseUrl: string,
+): { url: string; init: RequestInit } {
+  return buildOpenAIRequestInternal(request, model, baseUrl);
+}
+
+function buildOpenAIRequestInternal(
+  request: ChatRequest,
+  model: string,
+  baseUrl: string,
+  apiKey?: string,
 ): { url: string; init: RequestInit } {
   const messages: Array<{ role: string; content: unknown }> = [];
 
@@ -106,7 +128,7 @@ export function buildOpenAIRequest(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       } as Record<string, string>,
       body: JSON.stringify(body),
     },

@@ -92,6 +92,28 @@ export function buildGoogleRequest(
   apiKey: string,
   baseUrl: string,
 ): { url: string; init: RequestInit } {
+  const normalizedKey = apiKey?.trim();
+  if (!normalizedKey) {
+    throw new TypeError('Google API key must be a non-empty string');
+  }
+  return buildGoogleRequestInternal(request, model, baseUrl, normalizedKey);
+}
+
+/** @internal Builds a request whose provider key is supplied by CF AI Gateway BYOK. */
+export function buildGoogleByokRequest(
+  request: ChatRequest,
+  model: string,
+  baseUrl: string,
+): { url: string; init: RequestInit } {
+  return buildGoogleRequestInternal(request, model, baseUrl);
+}
+
+function buildGoogleRequestInternal(
+  request: ChatRequest,
+  model: string,
+  baseUrl: string,
+  apiKey?: string,
+): { url: string; init: RequestInit } {
   const contents = request.messages.map((m) => ({
     // Gemini uses 'model' where OpenAI/Anthropic use 'assistant'
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -114,7 +136,7 @@ export function buildGoogleRequest(
   if (Object.keys(genConfig).length > 0) body['generationConfig'] = genConfig;
 
   // Gemini takes the API key as ?key= query param, not an Authorization header
-  const url = `${baseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `${baseUrl}/v1beta/models/${model}:generateContent${apiKey ? `?key=${encodeURIComponent(apiKey)}` : ''}`;
 
   return {
     url,

@@ -3,13 +3,14 @@ import type {
   ChatRequest,
   ChatResult,
   FallbackOptions,
+  GatewayByokOptions,
   Provider,
 } from './types.js';
 import { readEnv } from './env.js';
 import { buildAigAuthHeader } from './gateway.js';
-import { buildAnthropicRequest, parseAnthropicResponse } from './adapters/anthropic.js';
-import { buildOpenAIRequest, parseOpenAIResponse } from './adapters/openai.js';
-import { buildGoogleRequest, parseGoogleResponse } from './adapters/google.js';
+import { buildAnthropicByokRequest, buildAnthropicRequest, parseAnthropicResponse } from './adapters/anthropic.js';
+import { buildOpenAIByokRequest, buildOpenAIRequest, parseOpenAIResponse } from './adapters/openai.js';
+import { buildGoogleByokRequest, buildGoogleRequest, parseGoogleResponse } from './adapters/google.js';
 
 // ---------------------------------------------------------------------------
 // Provider constants
@@ -29,8 +30,7 @@ const PROVIDER_ENV_KEYS: Record<Provider, string> = {
  * (Bearer auth, ZAI_API_KEY). Requires a FUNDED z.ai pay-as-you-go account/key.
  * Override with the ZAI_BASE_URL env var if you move endpoints, e.g. the Coding
  * Plan path https://api.z.ai/api/coding/paas/v4 (subscription quota, but z.ai's
- * TOS scopes that plan to coding tools, not app backends). Do NOT use
- * open.bigmodel.cn (Zhipu China, separate account → error 1113 with a z.ai key).
+ * TOS scopes that plan to coding tools, not app backends).
  */
 const PROVIDER_BASE: Record<Provider, string> = {
   anthropic: 'https://api.anthropic.com',
@@ -63,14 +63,20 @@ type BuildFn = (
   base: string,
 ) => { url: string; init: RequestInit };
 
+type BuildByokFn = (
+  req: ChatRequest,
+  model: string,
+  base: string,
+) => { url: string; init: RequestInit };
+
 type ParseFn = (data: unknown, provider: Provider, model: string) => ChatResult;
 
-const ADAPTERS: Record<Provider, { build: BuildFn; parse: ParseFn }> = {
-  anthropic: { build: buildAnthropicRequest, parse: parseAnthropicResponse },
-  openai: { build: buildOpenAIRequest, parse: parseOpenAIResponse },
-  google: { build: buildGoogleRequest, parse: parseGoogleResponse },
+const ADAPTERS: Record<Provider, { build: BuildFn; buildByok: BuildByokFn; parse: ParseFn }> = {
+  anthropic: { build: buildAnthropicRequest, buildByok: buildAnthropicByokRequest, parse: parseAnthropicResponse },
+  openai: { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
+  google: { build: buildGoogleRequest, buildByok: buildGoogleByokRequest, parse: parseGoogleResponse },
   // zai-glm is OpenAI-compatible; reuse the same adapter, only base URL differs
-  'zai-glm': { build: buildOpenAIRequest, parse: parseOpenAIResponse },
+  'zai-glm': { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
 };
 
 // ---------------------------------------------------------------------------
@@ -81,14 +87,21 @@ function resolveKey(
   provider: Provider,
   overrides?: Partial<Record<Provider, string>>,
 ): string | undefined {
-  return overrides?.[provider] ?? readEnv(PROVIDER_ENV_KEYS[provider]);
+  const value = overrides?.[provider] ?? readEnv(PROVIDER_ENV_KEYS[provider]);
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
+function normalizeGatewayBase(value?: string): string | undefined {
+  const trimmed = value?.trim().replace(/\/+$/, '');
+  return trimmed || undefined;
 }
 
 function getBaseUrl(provider: Provider, gatewayBase?: string): string {
   // zai-glm always bypasses the CF AI Gateway; base URL overridable via ZAI_BASE_URL
   // (e.g. to switch between the PAYG and Coding Plan endpoints without a code change).
   if (provider === 'zai-glm') {
-    return readEnv('ZAI_BASE_URL') ?? PROVIDER_BASE['zai-glm'];
+    return normalizeGatewayBase(readEnv('ZAI_BASE_URL')) ?? PROVIDER_BASE['zai-glm'];
   }
   if (!gatewayBase) {
     return PROVIDER_BASE[provider];
@@ -109,6 +122,65 @@ function getBaseUrl(provider: Provider, gatewayBase?: string): string {
  */
 function isGatewayRouted(provider: Provider, gatewayBase?: string): boolean {
   return Boolean(gatewayBase) && GATEWAY_SLUGS[provider] !== undefined;
+}
+
+/**
+ * BYOK is deliberately stricter than gateway routing alone: an authenticated
+ * gateway token must also be present before this package omits a provider key.
+ * A partial configuration therefore fails closed to the existing key-required
+ * behavior instead of accidentally issuing an unauthenticated request.
+ */
+function isGatewayByokStep(
+  provider: Provider,
+  gatewayBase: string | undefined,
+  hasGatewayAuth: boolean,
+  byok: FallbackOptions['gatewayByok'],
+): boolean {
+  return Boolean(byok && hasGatewayAuth && isGatewayRouted(provider, gatewayBase));
+}
+
+function gatewayByokHeaders(
+  byok: boolean | GatewayByokOptions | undefined,
+): Record<string, string> {
+  if (!byok || typeof byok === 'boolean') return {};
+  const alias = byok.alias?.trim();
+  return alias ? { 'cf-aig-byok-alias': alias } : {};
+}
+
+/** Remove provider credentials supplied through extraHeaders on a BYOK step. */
+function stripProviderAuthHeaders(
+  provider: Provider,
+  headers: Record<string, string>,
+): void {
+  const blocked = provider === 'anthropic'
+    ? new Set(['x-api-key'])
+    : provider === 'openai'
+      ? new Set(['authorization'])
+      : provider === 'google'
+        ? new Set(['x-goog-api-key'])
+        : new Set<string>();
+
+  for (const name of Object.keys(headers)) {
+    if (blocked.has(name.toLowerCase())) delete headers[name];
+  }
+}
+
+/**
+ * Gateway-only headers are credentials/control data and must never be sent to
+ * a direct provider, even if a caller accidentally supplied them through
+ * extraHeaders.
+ */
+function stripGatewayOnlyHeaders(headers: Record<string, string>): void {
+  const gatewayOnly = new Set(['cf-aig-authorization', 'cf-aig-byok-alias']);
+  for (const name of Object.keys(headers)) {
+    if (gatewayOnly.has(name.toLowerCase())) delete headers[name];
+  }
+}
+
+function sanitizedExtraHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers = { ...extra };
+  stripGatewayOnlyHeaders(headers);
+  return headers;
 }
 
 /**
@@ -164,11 +236,16 @@ export async function runWithFallback(
 ): Promise<ChatResult> {
   const fetchFn = opts?.fetchImpl ?? globalThis.fetch;
   const failures: StepFailure[] = [];
+  const gatewayBase = normalizeGatewayBase(opts?.gatewayBase);
+  const gatewayAuthHeaders = buildAigAuthHeader(opts?.gatewayToken);
+  const hasGatewayAuth = gatewayAuthHeaders['cf-aig-authorization'] !== undefined;
 
   for (const step of chain) {
     const apiKey = resolveKey(step.provider, opts?.keys);
+    const gatewayRouted = isGatewayRouted(step.provider, gatewayBase);
+    const gatewayByok = isGatewayByokStep(step.provider, gatewayBase, hasGatewayAuth, opts?.gatewayByok);
 
-    if (!apiKey) {
+    if (!apiKey && !gatewayByok) {
       failures.push({
         step,
         reason: `API key not configured (env: ${PROVIDER_ENV_KEYS[step.provider]}) — step skipped`,
@@ -176,17 +253,23 @@ export async function runWithFallback(
       continue;
     }
 
-    const baseUrl = getBaseUrl(step.provider, opts?.gatewayBase);
-    const { build, parse } = ADAPTERS[step.provider];
-    const { url, init } = build(request, step.model, apiKey, baseUrl);
+    const baseUrl = getBaseUrl(step.provider, gatewayBase);
+    const { build, buildByok, parse } = ADAPTERS[step.provider];
+    const { url, init } = gatewayByok
+      ? buildByok(request, step.model, baseUrl)
+      : build(request, step.model, apiKey as string, baseUrl);
 
     // CF AI Gateway auth header — attached ONLY when this specific step
     // routes through the gateway. Never blanket-merged into extraHeaders:
     // that would leak an account-wide gateway token to steps that bypass
     // the gateway entirely (zai-glm → api.z.ai; any provider when
     // gatewayBase is unset).
-    const aigHeaders = isGatewayRouted(step.provider, opts?.gatewayBase)
-      ? buildAigAuthHeader(opts?.gatewayToken)
+    const aigHeaders = gatewayRouted
+      ? gatewayAuthHeaders
+      : {};
+
+    const byokHeaders = gatewayByok
+      ? gatewayByokHeaders(opts?.gatewayByok)
       : {};
 
     // Merge caller-supplied extra headers (e.g. CF AI Gateway metadata tags)
@@ -195,10 +278,14 @@ export async function runWithFallback(
     //     value for the same key (R6 precedence)
     //   - adapter auth/content-type headers always win over both
     const headers = {
-      ...opts?.extraHeaders,
+      ...sanitizedExtraHeaders(opts?.extraHeaders),
       ...aigHeaders,
+      ...byokHeaders,
       ...(init.headers as Record<string, string>),
     };
+
+    if (gatewayByok) stripProviderAuthHeaders(step.provider, headers);
+    if (!gatewayRouted) stripGatewayOnlyHeaders(headers);
 
     let response: Response;
     try {

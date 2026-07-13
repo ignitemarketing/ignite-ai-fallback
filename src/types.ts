@@ -82,6 +82,15 @@ export interface ChatResult {
 // Options
 // ---------------------------------------------------------------------------
 
+/** Cloudflare AI Gateway Bring Your Own Key configuration. */
+export interface GatewayByokOptions {
+  /**
+   * Optional Secrets Store alias to select with `cf-aig-byok-alias`.
+   * Omit this field to use Cloudflare's default alias (no alias header).
+   */
+  alias?: string;
+}
+
 export interface FallbackOptions {
   /**
    * Cloudflare AI Gateway base URL, e.g.:
@@ -143,4 +152,24 @@ export interface FallbackOptions {
    * `gatewayToken`'s computed header wins.
    */
   gatewayToken?: string;
+
+  /**
+   * Use provider credentials stored in Cloudflare AI Gateway (BYOK) instead
+   * of sending the provider key from this runtime.
+   *
+   * BYOK activates for a step only when all three conditions are true:
+   *   1. this option is truthy,
+   *   2. `gatewayBase` is set and the provider routes through that gateway,
+   *   3. `gatewayToken` is set.
+   *
+   * On an active BYOK step the provider credential is omitted (`x-api-key`,
+   * `Authorization`, or Google's `?key=`). Direct-provider steps still require
+   * and send their normal provider key, including gateway-bypassing fallbacks
+   * such as zai-glm. This prevents BYOK from weakening direct-call auth.
+   *
+   * Pass `true` to use Cloudflare's default stored-key alias (no
+   * `cf-aig-byok-alias` header), or `{ alias: 'name' }` to select an explicit
+   * alias for the gateway-routed request.
+   */
+  gatewayByok?: boolean | GatewayByokOptions;
 }

@@ -46,6 +46,17 @@ const WITH_SCHEMA = {
 // ---------------------------------------------------------------------------
 
 describe('Anthropic adapter — buildAnthropicRequest', () => {
+  it('rejects a missing or whitespace-only API key', () => {
+    assert.throws(
+      () => buildAnthropicRequest(SIMPLE, 'claude-haiku', undefined, 'https://api.anthropic.com'),
+      /non-empty string/,
+    );
+    assert.throws(
+      () => buildAnthropicRequest(SIMPLE, 'claude-haiku', '   ', 'https://api.anthropic.com'),
+      /non-empty string/,
+    );
+  });
+
   it('builds correct URL', () => {
     const { url } = buildAnthropicRequest(SIMPLE, 'claude-3-haiku', 'key', 'https://api.anthropic.com');
     assert.equal(url, 'https://api.anthropic.com/v1/messages');
@@ -144,6 +155,11 @@ describe('Anthropic adapter — parseAnthropicResponse', () => {
 
 describe('OpenAI adapter — buildOpenAIRequest', () => {
   const BASE = 'https://api.openai.com/v1';
+
+  it('rejects a missing or whitespace-only API key', () => {
+    assert.throws(() => buildOpenAIRequest(SIMPLE, 'gpt-4o', undefined, BASE), /non-empty string/);
+    assert.throws(() => buildOpenAIRequest(SIMPLE, 'gpt-4o', '   ', BASE), /non-empty string/);
+  });
 
   it('builds correct URL', () => {
     const { url } = buildOpenAIRequest(SIMPLE, 'gpt-4o', 'key', BASE);
@@ -246,12 +262,12 @@ describe('OpenAI adapter — parseOpenAIResponse', () => {
 // ---------------------------------------------------------------------------
 
 describe('zai-glm adapter', () => {
-  const ZAI_BASE = 'https://open.bigmodel.cn/api/paas/v4';
+  const ZAI_BASE = 'https://api.z.ai/api/paas/v4';
 
   it('uses z.ai base URL in the built request', () => {
     const { url } = buildOpenAIRequest(SIMPLE, 'glm-4-plus', 'zai-key', ZAI_BASE);
     assert.equal(url, `${ZAI_BASE}/chat/completions`);
-    assert.ok(url.includes('bigmodel.cn'), url);
+    assert.ok(url.includes('api.z.ai'), url);
   });
 
   it('sets Bearer auth for zai-glm', () => {
@@ -273,6 +289,11 @@ describe('zai-glm adapter', () => {
 
 describe('Google adapter — buildGoogleRequest', () => {
   const BASE = 'https://generativelanguage.googleapis.com';
+
+  it('rejects a missing or whitespace-only API key', () => {
+    assert.throws(() => buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', undefined, BASE), /non-empty string/);
+    assert.throws(() => buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', '   ', BASE), /non-empty string/);
+  });
 
   it('builds URL with model path and ?key= query param', () => {
     const { url } = buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', 'gkey', BASE);

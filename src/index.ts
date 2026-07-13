@@ -36,6 +36,7 @@ export type {
   ChatRequest,
   ChatResult,
   FallbackOptions,
+  GatewayByokOptions,
 } from './types.js';
 
 // Adapter functions — exported for callers that want to use an adapter directly
