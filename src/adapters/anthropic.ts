@@ -41,6 +41,28 @@ export function buildAnthropicRequest(
   apiKey: string,
   baseUrl: string,
 ): { url: string; init: RequestInit } {
+  const normalizedKey = apiKey?.trim();
+  if (!normalizedKey) {
+    throw new TypeError('Anthropic API key must be a non-empty string');
+  }
+  return buildAnthropicRequestInternal(request, model, baseUrl, normalizedKey);
+}
+
+/** @internal Builds a request whose provider key is supplied by CF AI Gateway BYOK. */
+export function buildAnthropicByokRequest(
+  request: ChatRequest,
+  model: string,
+  baseUrl: string,
+): { url: string; init: RequestInit } {
+  return buildAnthropicRequestInternal(request, model, baseUrl);
+}
+
+function buildAnthropicRequestInternal(
+  request: ChatRequest,
+  model: string,
+  baseUrl: string,
+  apiKey?: string,
+): { url: string; init: RequestInit } {
   const body: Record<string, unknown> = {
     model,
     max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
@@ -71,7 +93,7 @@ export function buildAnthropicRequest(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        ...(apiKey ? { 'x-api-key': apiKey } : {}),
         'anthropic-version': '2023-06-01',
       } as Record<string, string>,
       body: JSON.stringify(body),

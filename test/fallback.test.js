@@ -569,6 +569,17 @@ describe('buildAigAuthHeader', () => {
     assert.deepEqual(buildAigAuthHeader(''), {});
   });
 
+  it('returns {} for whitespace or an empty Bearer prefix', () => {
+    assert.deepEqual(buildAigAuthHeader('   '), {});
+    assert.deepEqual(buildAigAuthHeader(' Bearer   '), {});
+  });
+
+  it('trims a raw token before prefixing it', () => {
+    assert.deepEqual(buildAigAuthHeader('  abc123  '), {
+      'cf-aig-authorization': 'Bearer abc123',
+    });
+  });
+
   it('prefixes a raw token with "Bearer "', () => {
     assert.deepEqual(buildAigAuthHeader('abc123'), { 'cf-aig-authorization': 'Bearer abc123' });
   });

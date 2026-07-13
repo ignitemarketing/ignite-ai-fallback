@@ -67,7 +67,7 @@ console.log(result.provider, result.model);
 | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | `anthropic` |
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `openai` |
 | `google` | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com` | `google-ai-studio` |
-| `zai-glm` | `ZAI_API_KEY` | `https://open.bigmodel.cn/api/paas/v4` | *(bypasses gateway)* |
+| `zai-glm` | `ZAI_API_KEY` | `https://api.z.ai/api/paas/v4` | *(bypasses gateway)* |
 
 zai-glm is OpenAI-compatible and always calls its direct base URL — Cloudflare AI Gateway has no native z.ai provider.
 
@@ -88,7 +88,7 @@ const result = await runWithFallback(chain, request, {
 });
 ```
 
-zai-glm ignores `gatewayBase` and always calls `https://open.bigmodel.cn/api/paas/v4` directly.
+zai-glm ignores `gatewayBase` and always calls `https://api.z.ai/api/paas/v4` directly.
 
 ### Gateway auth (`gatewayToken`)
 
@@ -124,6 +124,48 @@ const headers = {
 
 `buildAigAuthHeader` is a pure, zero-dependency function: returns `{}` for a falsy token, otherwise `{ 'cf-aig-authorization': 'Bearer <token>' }` (same no-double-prefix rule).
 
+### Vaulted provider keys (`gatewayByok`)
+
+Cloudflare AI Gateway can supply provider credentials from its linked Secrets
+Store. Enable this per call with `gatewayByok`:
+
+```ts
+const result = await runWithFallback(chain, request, {
+  gatewayBase: process.env.CF_AI_GATEWAY_BASE,
+  gatewayToken: process.env.CF_AI_GATEWAY_TOKEN,
+  gatewayByok: true,
+});
+```
+
+For a gateway-routed step, the combination of `gatewayBase`, `gatewayToken`,
+and `gatewayByok` causes the package to omit the provider credential:
+
+- Anthropic: no `x-api-key`
+- OpenAI: no provider `Authorization`
+- Google AI Studio: no `?key=` query parameter
+
+Cloudflare's default BYOK alias is used when `gatewayByok: true` is passed, so
+no `cf-aig-byok-alias` header is sent. Select an explicit stored-key alias with:
+
+```ts
+const result = await runWithFallback(chain, request, {
+  gatewayBase: process.env.CF_AI_GATEWAY_BASE,
+  gatewayToken: process.env.CF_AI_GATEWAY_TOKEN,
+  gatewayByok: { alias: 'billing-key-2' },
+});
+// cf-aig-byok-alias: billing-key-2
+```
+
+Security rules:
+
+- BYOK never activates without both `gatewayBase` and `gatewayToken`.
+- `cf-aig-authorization` and `cf-aig-byok-alias` are never added to direct
+  provider calls or gateway-bypassing providers such as zai-glm.
+- Direct steps still require and send their provider key. This includes a
+  direct fallback after a gateway BYOK step fails.
+- Existing callers are unchanged: omit `gatewayByok` to keep sending provider
+  keys through the gateway exactly as before.
+
 ---
 
 ## API key resolution
@@ -134,13 +176,17 @@ Keys are resolved in this order:
 2. Environment variable for the provider (see table above)
 3. If neither resolves → step is **skipped** (non-fatal; listed in the thrown `AggregateError` if all steps fail)
 
+Exception: an authenticated, gateway-routed `gatewayByok` step does not need a
+local provider key because Cloudflare supplies it. A partial BYOK configuration
+(missing `gatewayBase` or `gatewayToken`) does not qualify for this exception.
+
 ---
 
 ## Chain advancement rules
 
 | Situation | Behavior |
 |---|---|
-| API key absent | Skip step (non-fatal) |
+| API key absent | Skip step, unless this is an authenticated gateway BYOK step |
 | HTTP 429 | Advance to next step |
 | HTTP 5xx (incl. 529 overloaded) | Advance to next step |
 | Network error (fetch throws) | Advance to next step |
