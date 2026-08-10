@@ -1,0 +1,3 @@
+# Minimal manifest: ClickUp->GitHub task migration opt-in only.
+# NOT fleet onboarding - no runner polls this repo.
+clickup_migration_enabled: true
