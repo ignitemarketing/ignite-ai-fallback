@@ -30,7 +30,7 @@ concurrency:
 jobs:
   unblock:
     name: unblock
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - name: Unblock dependents of the closed issue
