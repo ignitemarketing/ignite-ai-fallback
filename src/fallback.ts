@@ -21,6 +21,7 @@ const PROVIDER_ENV_KEYS: Record<Provider, string> = {
   openai: 'OPENAI_API_KEY',
   google: 'GEMINI_API_KEY',
   'zai-glm': 'ZAI_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
 };
 
 /**
@@ -37,6 +38,7 @@ const PROVIDER_BASE: Record<Provider, string> = {
   openai: 'https://api.openai.com/v1',
   google: 'https://generativelanguage.googleapis.com',
   'zai-glm': 'https://api.z.ai/api/paas/v4',
+  deepseek: 'https://api.deepseek.com',
 };
 
 /**
@@ -45,11 +47,14 @@ const PROVIDER_BASE: Record<Provider, string> = {
  *
  * zai-glm is intentionally absent — CF has no native z.ai provider,
  * so zai-glm always calls its direct base URL regardless of gatewayBase.
+ * deepseek has a native CF AI Gateway provider (slug "deepseek",
+ * OpenAI-compatible), so it routes through the gateway when configured.
  */
 const GATEWAY_SLUGS: Partial<Record<Provider, string>> = {
   anthropic: 'anthropic',
   openai: 'openai',
   google: 'google-ai-studio',
+  deepseek: 'deepseek',
 };
 
 // ---------------------------------------------------------------------------
@@ -77,6 +82,9 @@ const ADAPTERS: Record<Provider, { build: BuildFn; buildByok: BuildByokFn; parse
   google: { build: buildGoogleRequest, buildByok: buildGoogleByokRequest, parse: parseGoogleResponse },
   // zai-glm is OpenAI-compatible; reuse the same adapter, only base URL differs
   'zai-glm': { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
+  // deepseek is OpenAI-compatible (https://api.deepseek.com, Bearer auth);
+  // reuse the same adapter, only base URL differs.
+  deepseek: { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
 };
 
 // ---------------------------------------------------------------------------
@@ -154,7 +162,7 @@ function stripProviderAuthHeaders(
 ): void {
   const blocked = provider === 'anthropic'
     ? new Set(['x-api-key'])
-    : provider === 'openai'
+    : provider === 'openai' || provider === 'deepseek'
       ? new Set(['authorization'])
       : provider === 'google'
         ? new Set(['x-goog-api-key'])

@@ -116,6 +116,27 @@ describe('Key resolution', () => {
     assert.equal(callCount, 1, 'should make 1 HTTP call (anthropic was skipped)');
   });
 
+  it('uses DEEPSEEK_API_KEY env var for the deepseek provider', async () => {
+    process.env['DEEPSEEK_API_KEY'] = 'deepseek-env-key';
+    let capturedInit;
+    const fetchImpl = async (_url, init) => {
+      capturedInit = init;
+      return jsonResponse(OPENAI_OK);
+    };
+
+    try {
+      await runWithFallback(
+        [{ provider: 'deepseek', model: 'deepseek-v4-flash' }],
+        { messages: [{ role: 'user', content: 'hi' }] },
+        { fetchImpl },
+      );
+    } finally {
+      delete process.env['DEEPSEEK_API_KEY'];
+    }
+
+    assert.ok(capturedInit.headers['Authorization'].includes('deepseek-env-key'), 'env key should be used');
+  });
+
   it('includes skipped steps in AggregateError.errors', async () => {
     // No keys at all
     let caught;

@@ -97,6 +97,23 @@ describe('runWithFallback — first-step success', () => {
     assert.equal(result.text, 'Hello from zai-glm');
     assert.equal(result.provider, 'zai-glm');
   });
+
+  it('returns result from deepseek (OpenAI-compatible)', async () => {
+    const fetchImpl = async (url) => {
+      assert.ok(url.includes('api.deepseek.com'), `expected deepseek URL, got: ${url}`);
+      return jsonResponse(OPENAI_OK);
+    };
+
+    const result = await runWithFallback(
+      [{ provider: 'deepseek', model: 'deepseek-v4-flash' }],
+      makeRequest(),
+      { keys: { deepseek: 'test-key' }, fetchImpl },
+    );
+
+    assert.equal(result.text, 'Hello from OpenAI');
+    assert.equal(result.provider, 'deepseek');
+    assert.equal(result.model, 'deepseek-v4-flash');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -412,6 +429,38 @@ describe('runWithFallback — CF AI Gateway routing', () => {
 
     assert.ok(capturedUrl.includes('api.z.ai'), `zai-glm should use direct URL, got: ${capturedUrl}`);
     assert.ok(!capturedUrl.includes('gateway.ai.cloudflare.com'), `Should bypass gateway, got: ${capturedUrl}`);
+  });
+
+  it('routes deepseek through the deepseek gateway slug', async () => {
+    let capturedUrl;
+    const fetchImpl = async (url) => {
+      capturedUrl = url;
+      return jsonResponse(OPENAI_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'deepseek', model: 'deepseek-v4-flash' }],
+      makeRequest(),
+      { keys: { deepseek: 'k' }, gatewayBase: GATEWAY, fetchImpl },
+    );
+
+    assert.ok(capturedUrl.startsWith(`${GATEWAY}/deepseek`), `URL: ${capturedUrl}`);
+  });
+
+  it('deepseek falls back to its direct base URL when gatewayBase is unset', async () => {
+    let capturedUrl;
+    const fetchImpl = async (url) => {
+      capturedUrl = url;
+      return jsonResponse(OPENAI_OK);
+    };
+
+    await runWithFallback(
+      [{ provider: 'deepseek', model: 'deepseek-v4-flash' }],
+      makeRequest(),
+      { keys: { deepseek: 'k' }, fetchImpl },
+    );
+
+    assert.ok(capturedUrl.startsWith('https://api.deepseek.com'), `URL: ${capturedUrl}`);
   });
 });
 
