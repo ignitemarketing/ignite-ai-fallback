@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.8.0
+
+- **Added** `deepseek` provider (DeepSeek API, OpenAI-compatible). Reads
+  `DEEPSEEK_API_KEY`, base URL `https://api.deepseek.com`, and routes through
+  the Cloudflare AI Gateway (`{gatewayBase}/deepseek/chat/completions`) when
+  `gatewayBase` is set — Cloudflare has a native DeepSeek provider. Reuses the
+  OpenAI adapter (Bearer auth, `chat/completions`), same as `zai-glm`. Provider
+  key is scrubbed on BYOK steps like the other Bearer-auth providers.
+
 ## 0.7.0
 
 - **Added** `FallbackOptions.gatewayByok` for Cloudflare AI Gateway provider

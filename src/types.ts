@@ -4,7 +4,7 @@
  */
 
 /** Supported LLM providers. */
-export type Provider = 'anthropic' | 'openai' | 'google' | 'zai-glm';
+export type Provider = 'anthropic' | 'openai' | 'google' | 'zai-glm' | 'deepseek';
 
 /** One step in a fallback chain — a provider + model pair. */
 export interface ProviderStep {
@@ -100,6 +100,7 @@ export interface FallbackOptions {
    *   anthropic     → {gatewayBase}/anthropic/v1/messages
    *   openai        → {gatewayBase}/openai/chat/completions
    *   google        → {gatewayBase}/google-ai-studio/v1beta/models/{model}:generateContent
+   *   deepseek      → {gatewayBase}/deepseek/chat/completions
    *
    * zai-glm ALWAYS bypasses the gateway — Cloudflare has no native z.ai provider.
    */
@@ -111,7 +112,8 @@ export interface FallbackOptions {
   /**
    * API key overrides per provider.
    * Falls back to environment variables (ANTHROPIC_API_KEY, OPENAI_API_KEY,
-   * GEMINI_API_KEY, ZAI_API_KEY) when a key is absent from this map.
+   * GEMINI_API_KEY, ZAI_API_KEY, DEEPSEEK_API_KEY) when a key is absent from
+   * this map.
    * A step whose key resolves to undefined is silently skipped (non-fatal).
    */
   keys?: Partial<Record<Provider, string>>;
