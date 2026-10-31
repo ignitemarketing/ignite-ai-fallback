@@ -2,7 +2,9 @@ name: Publish to JSR
 
 # Publishes to JSR whenever a v* tag is pushed (e.g. v0.2.0).
 # Requires a one-time link of the JSR package to this GitHub repo:
-#   jsr.io/@ignitemarketing/ai-fallback → Settings → GitHub repository → colingreig/ignite-ai-fallback
+#   jsr.io/@ignitemarketing/ai-fallback → Settings → GitHub repository → ignitemarketing/ignite-ai-fallback
+# (JSR's settings page still shows the pre-transfer name colingreig/ignite-ai-fallback; OIDC
+# publishing kept working after the 2026-08 transfer, e.g. v0.8.0 on 2026-08-24.)
 # After that, JSR trusts this workflow via OIDC — no token needed.
 
 on:
