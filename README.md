@@ -15,10 +15,12 @@ No `@anthropic-ai/sdk`, no `openai`, no `@ai-sdk/*`. Just `fetch` + TypeScript.
 ## Install
 
 ```bash
-# npm / pnpm / bun
-npm install @ignitemarketing/ai-fallback
+# npm / pnpm / bun: install from JSR's npm compatibility registry
+npx jsr add @ignitemarketing/ai-fallback
+# or declare it directly in package.json:
+#   "@ignitemarketing/ai-fallback": "npm:@jsr/ignitemarketing__ai-fallback@^0.8.0"
 
-# Deno (JSR — pending scope claim, see below)
+# Deno
 import { runWithFallback } from 'jsr:@ignitemarketing/ai-fallback';
 ```
 
@@ -237,10 +239,11 @@ npm run test:all     # build + test in one command
 
 ---
 
-## JSR publishing (pending)
+## Publishing to JSR
 
-`jsr.json` is ready. Publishing requires:
-- Claiming the `@ignite` scope on [jsr.io](https://jsr.io) (Anthropic account or org)
-- Running `npx jsr publish` — do **not** run this until the scope is confirmed
+The package is published at [jsr.io/@ignitemarketing/ai-fallback](https://jsr.io/@ignitemarketing/ai-fallback).
+To release, bump `version` in `jsr.json` (and `package.json`), add a `CHANGELOG.md` entry, and push a
+matching `v<version>` tag. `.github/workflows/publish.yml` checks the tag matches `jsr.json`, runs
+`npm run test:all`, and publishes through GitHub OIDC (no token).
 
 Exports point to `src/index.ts` (JSR compiles TypeScript natively).
