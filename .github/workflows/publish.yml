@@ -32,12 +32,12 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match jsr.json version $PKG" >&2
             exit 1
           fi
+      # package-lock.json is committed and pins the TypeScript build tool.
+      # `npm ci` installs exactly that and never rewrites it, so the tree stays
+      # clean and jsr's uncommitted-changes guard needs no override.
+      - name: Install dependencies
+        run: npm ci
       - name: Build & test
-        run: |
-          npm install
-          npm run test:all
+        run: npm run test:all
       - name: Publish to JSR
-        # --allow-dirty: `npm install` above writes a package-lock.json (no
-        # committed lockfile, since the package has zero runtime deps), which
-        # otherwise trips jsr's uncommitted-changes guard.
-        run: npx jsr publish --allow-dirty
+        run: npx jsr publish
