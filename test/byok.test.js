@@ -307,3 +307,60 @@ describe('Cloudflare AI Gateway BYOK', () => {
     assert.equal(callCount, 0);
   });
 });
+
+describe('Output-token limit field per OpenAI-compatible provider', () => {
+  const MAXED = { ...REQUEST, maxTokens: 321 };
+
+  async function captureBody(provider, options) {
+    let body;
+    await runWithFallback([{ provider, model: 'm' }], MAXED, {
+      ...options,
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(init.body);
+        return jsonResponse(OPENAI_OK);
+      },
+    });
+    return body;
+  }
+
+  function assertField(body, field) {
+    const other = field === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens';
+    assert.equal(body[field], 321);
+    assert.ok(!(other in body), `${other} must not be sent`);
+  }
+
+  it('sends max_completion_tokens on a direct openai step', async () => {
+    assertField(await captureBody('openai', { keys: { openai: 'k' } }), 'max_completion_tokens');
+  });
+
+  it('sends max_completion_tokens on a gateway openai step', async () => {
+    const body = await captureBody('openai', { gatewayBase: GATEWAY, keys: { openai: 'k' } });
+    assertField(body, 'max_completion_tokens');
+  });
+
+  it('sends max_completion_tokens on a gateway BYOK openai step', async () => {
+    const body = await captureBody('openai', {
+      gatewayBase: GATEWAY,
+      gatewayToken: 't',
+      gatewayByok: true,
+    });
+    assertField(body, 'max_completion_tokens');
+  });
+
+  it('keeps max_tokens for zai-glm (direct)', async () => {
+    assertField(await captureBody('zai-glm', { keys: { 'zai-glm': 'k' } }), 'max_tokens');
+  });
+
+  it('keeps max_tokens for deepseek (direct)', async () => {
+    assertField(await captureBody('deepseek', { keys: { deepseek: 'k' } }), 'max_tokens');
+  });
+
+  it('keeps max_tokens for deepseek on a gateway BYOK step', async () => {
+    const body = await captureBody('deepseek', {
+      gatewayBase: GATEWAY,
+      gatewayToken: 't',
+      gatewayByok: true,
+    });
+    assertField(body, 'max_tokens');
+  });
+});

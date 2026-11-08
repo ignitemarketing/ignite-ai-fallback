@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.0
+
+- **Fixed** the OpenAI adapter now sends `max_completion_tokens` instead of
+  `max_tokens`. GPT-5 and o-series models reject `max_tokens` with HTTP 400
+  (`Unsupported parameter: 'max_tokens' ... Use 'max_completion_tokens'`),
+  which made every OpenAI step fail and fall through to the next provider.
+  `max_completion_tokens` is accepted by all OpenAI chat models, so there is no
+  per-model switch. Applies to direct, gateway, and gateway BYOK routes.
+- **Unchanged:** `zai-glm` and `deepseek` still send `max_tokens` (their APIs
+  document only that field), and the Anthropic and Google adapters are not
+  touched. The default limit stays 4096.
+- `buildOpenAIRequest` takes an optional fifth argument selecting the field
+  (`'max_completion_tokens'` by default, or `'max_tokens'`); existing
+  four-argument calls get `max_completion_tokens`.
+
 ## 0.8.0
 
 - **Added** `deepseek` provider (DeepSeek API, OpenAI-compatible). Reads

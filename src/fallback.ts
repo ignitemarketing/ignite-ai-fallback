@@ -76,15 +76,24 @@ type BuildByokFn = (
 
 type ParseFn = (data: unknown, provider: Provider, model: string) => ChatResult;
 
+// OpenAI-compatible providers whose APIs document only `max_tokens`
+// (OpenAI itself sends `max_completion_tokens`, the builder default).
+const MAX_TOKENS_OPENAI_COMPATIBLE = {
+  build: ((req, model, key, base) => buildOpenAIRequest(req, model, key, base, 'max_tokens')) as BuildFn,
+  buildByok: ((req, model, base) => buildOpenAIByokRequest(req, model, base, 'max_tokens')) as BuildByokFn,
+  parse: parseOpenAIResponse as ParseFn,
+};
+
 const ADAPTERS: Record<Provider, { build: BuildFn; buildByok: BuildByokFn; parse: ParseFn }> = {
   anthropic: { build: buildAnthropicRequest, buildByok: buildAnthropicByokRequest, parse: parseAnthropicResponse },
   openai: { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
   google: { build: buildGoogleRequest, buildByok: buildGoogleByokRequest, parse: parseGoogleResponse },
-  // zai-glm is OpenAI-compatible; reuse the same adapter, only base URL differs
-  'zai-glm': { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
+  // zai-glm is OpenAI-compatible; reuse the same adapter. Only the base URL
+  // differs, and it keeps `max_tokens` (z.ai documents no other limit field).
+  'zai-glm': MAX_TOKENS_OPENAI_COMPATIBLE,
   // deepseek is OpenAI-compatible (https://api.deepseek.com, Bearer auth);
-  // reuse the same adapter, only base URL differs.
-  deepseek: { build: buildOpenAIRequest, buildByok: buildOpenAIByokRequest, parse: parseOpenAIResponse },
+  // reuse the same adapter, only base URL differs. Keeps `max_tokens`.
+  deepseek: MAX_TOKENS_OPENAI_COMPATIBLE,
 };
 
 // ---------------------------------------------------------------------------
