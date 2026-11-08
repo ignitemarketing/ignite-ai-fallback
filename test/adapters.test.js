@@ -239,11 +239,26 @@ describe('OpenAI adapter — buildOpenAIRequest', () => {
     assert.equal(body.response_format.json_schema.schema.additionalProperties, true);
   });
 
-  it('includes max_tokens, temperature', () => {
+  it('sends max_completion_tokens (not max_tokens), plus temperature', () => {
     const { init } = buildOpenAIRequest(FULL, 'gpt-4o', 'k', BASE);
     const body = JSON.parse(init.body);
-    assert.equal(body.max_tokens, 256);
+    assert.equal(body.max_completion_tokens, 256);
+    assert.ok(!('max_tokens' in body));
     assert.equal(body.temperature, 0.7);
+  });
+
+  it('defaults max_completion_tokens to 4096 when not specified', () => {
+    const { init } = buildOpenAIRequest(SIMPLE, 'gpt-5-mini', 'k', BASE);
+    const body = JSON.parse(init.body);
+    assert.equal(body.max_completion_tokens, 4096);
+    assert.ok(!('max_tokens' in body));
+  });
+
+  it('sends max_tokens when the max_tokens field is requested', () => {
+    const { init } = buildOpenAIRequest(FULL, 'glm-4-plus', 'k', BASE, 'max_tokens');
+    const body = JSON.parse(init.body);
+    assert.equal(body.max_tokens, 256);
+    assert.ok(!('max_completion_tokens' in body));
   });
 });
 

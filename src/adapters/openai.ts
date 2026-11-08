@@ -3,6 +3,16 @@ import type { ChatRequest, ChatResult, Provider, MessageContent } from '../types
 const DEFAULT_MAX_TOKENS = 4096;
 
 /**
+ * Request-body field that carries the output-token limit.
+ *
+ * - `max_completion_tokens` (default): OpenAI. GPT-5 and o-series models reject
+ *   `max_tokens`; every OpenAI chat model accepts `max_completion_tokens`.
+ * - `max_tokens`: OpenAI-compatible providers (zai-glm, deepseek) whose APIs
+ *   document only `max_tokens`.
+ */
+export type OpenAITokenLimitField = 'max_completion_tokens' | 'max_tokens';
+
+/**
  * Recursively normalizes a JSON Schema for OpenAI's strict structured-output
  * mode, which requires (for every object node): `additionalProperties: false`,
  * and `required` listing EVERY key in `properties` (optionality is expressed
@@ -57,8 +67,9 @@ function normalizeContent(content: MessageContent): unknown {
  * Endpoint: POST {base}/chat/completions
  * Auth:     Authorization: Bearer {apiKey}
  *
- * This function is ALSO used by the 'zai-glm' provider, which is OpenAI-compatible.
- * The only difference is the base URL (https://api.z.ai/api/paas/v4 by default).
+ * This function is ALSO used by the 'zai-glm' and 'deepseek' providers, which are
+ * OpenAI-compatible. They differ in base URL and pass
+ * `tokenLimitField: 'max_tokens'`; OpenAI itself gets `max_completion_tokens`.
  *
  * Gateway slug (when CF AI Gateway is configured): "openai"
  * → {gatewayBase}/openai/chat/completions
@@ -70,12 +81,13 @@ export function buildOpenAIRequest(
   model: string,
   apiKey: string,
   baseUrl: string,
+  tokenLimitField: OpenAITokenLimitField = 'max_completion_tokens',
 ): { url: string; init: RequestInit } {
   const normalizedKey = apiKey?.trim();
   if (!normalizedKey) {
     throw new TypeError('OpenAI-compatible API key must be a non-empty string');
   }
-  return buildOpenAIRequestInternal(request, model, baseUrl, normalizedKey);
+  return buildOpenAIRequestInternal(request, model, baseUrl, tokenLimitField, normalizedKey);
 }
 
 /** @internal Builds a request whose provider key is supplied by CF AI Gateway BYOK. */
@@ -83,14 +95,16 @@ export function buildOpenAIByokRequest(
   request: ChatRequest,
   model: string,
   baseUrl: string,
+  tokenLimitField: OpenAITokenLimitField = 'max_completion_tokens',
 ): { url: string; init: RequestInit } {
-  return buildOpenAIRequestInternal(request, model, baseUrl);
+  return buildOpenAIRequestInternal(request, model, baseUrl, tokenLimitField);
 }
 
 function buildOpenAIRequestInternal(
   request: ChatRequest,
   model: string,
   baseUrl: string,
+  tokenLimitField: OpenAITokenLimitField,
   apiKey?: string,
 ): { url: string; init: RequestInit } {
   const messages: Array<{ role: string; content: unknown }> = [];
@@ -106,7 +120,7 @@ function buildOpenAIRequestInternal(
   const body: Record<string, unknown> = {
     model,
     messages,
-    max_tokens: request.maxTokens ?? DEFAULT_MAX_TOKENS,
+    [tokenLimitField]: request.maxTokens ?? DEFAULT_MAX_TOKENS,
   };
 
   if (request.temperature !== undefined) body['temperature'] = request.temperature;

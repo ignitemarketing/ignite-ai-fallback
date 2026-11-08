@@ -73,6 +73,8 @@ console.log(result.provider, result.model);
 
 zai-glm is OpenAI-compatible and always calls its direct base URL — Cloudflare AI Gateway has no native z.ai provider.
 
+`maxTokens` is sent as `max_completion_tokens` on `openai` steps (GPT-5 and o-series models reject `max_tokens`) and as `max_tokens` on `zai-glm` and `deepseek`, whose APIs document only that field.
+
 ---
 
 ## Cloudflare AI Gateway
