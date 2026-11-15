@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## 0.8.1
+## 0.9.1
 
 - **Security:** Google requests now send the API key in the `x-goog-api-key`
   header for both direct and Cloudflare AI Gateway calls, keeping credentials
