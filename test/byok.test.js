@@ -121,8 +121,9 @@ describe('Cloudflare AI Gateway BYOK', () => {
     assert.equal(capturedHeaders['cf-aig-authorization'], 'Bearer gateway-token');
   });
 
-  it('omits the Google key query parameter on a gateway BYOK request', async () => {
+  it('omits the Google key from the URL and headers on a gateway BYOK request', async () => {
     let capturedUrl;
+    let capturedHeaders;
     await runWithFallback(
       [{ provider: 'google', model: 'gemini-2.5-flash' }],
       REQUEST,
@@ -131,8 +132,9 @@ describe('Cloudflare AI Gateway BYOK', () => {
         gatewayToken: 'gateway-token',
         gatewayByok: true,
         keys: { google: 'must-not-leak' },
-        fetchImpl: async (url) => {
+        fetchImpl: async (url, init) => {
           capturedUrl = url;
+          capturedHeaders = init.headers;
           return jsonResponse(GOOGLE_OK);
         },
       },
@@ -140,6 +142,7 @@ describe('Cloudflare AI Gateway BYOK', () => {
 
     assert.ok(capturedUrl.startsWith(`${GATEWAY}/google-ai-studio/`));
     assert.equal(new URL(capturedUrl).searchParams.has('key'), false);
+    assert.equal(capturedHeaders['x-goog-api-key'], undefined);
   });
 
   it('uses Cloudflare default BYOK alias when no alias is supplied', async () => {

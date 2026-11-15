@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.1
+
+- **Security:** Google requests now send the API key in the `x-goog-api-key`
+  header for both direct and Cloudflare AI Gateway calls, keeping credentials
+  out of request URLs and gateway request-path logs. Gateway BYOK requests
+  continue to omit the provider key entirely.
+
 ## 0.9.0
 
 - **Fixed** the OpenAI adapter now sends `max_completion_tokens` instead of
