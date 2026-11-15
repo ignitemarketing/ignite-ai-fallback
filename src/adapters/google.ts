@@ -77,14 +77,14 @@ function toGeminiSchema(schema: unknown): unknown {
 /**
  * Translates a ChatRequest into a Google Gemini generateContent HTTP call.
  *
- * Endpoint: POST {base}/v1beta/models/{model}:generateContent?key={apiKey}
- * Auth:     API key in query param (not a Bearer header)
+ * Endpoint: POST {base}/v1beta/models/{model}:generateContent
+ * Auth:     x-goog-api-key header for both direct and gateway calls;
+ *           the API key is never included in the URL.
  *
  * Role mapping: ChatMessage.role 'assistant' → Gemini role 'model'.
  *
  * Gateway slug (when CF AI Gateway is configured): "google-ai-studio"
  * → {gatewayBase}/google-ai-studio/v1beta/models/{model}:generateContent
- *   (the ?key= is still appended for non-gateway direct calls)
  */
 export function buildGoogleRequest(
   request: ChatRequest,
@@ -135,14 +135,16 @@ function buildGoogleRequestInternal(
   }
   if (Object.keys(genConfig).length > 0) body['generationConfig'] = genConfig;
 
-  // Gemini takes the API key as ?key= query param, not an Authorization header
-  const url = `${baseUrl}/v1beta/models/${model}:generateContent${apiKey ? `?key=${encodeURIComponent(apiKey)}` : ''}`;
+  const url = `${baseUrl}/v1beta/models/${model}:generateContent`;
 
   return {
     url,
     init: {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' } as Record<string, string>,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'x-goog-api-key': apiKey } : {}),
+      } as Record<string, string>,
       body: JSON.stringify(body),
     },
   };

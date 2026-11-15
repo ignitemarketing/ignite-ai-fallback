@@ -165,7 +165,7 @@ export interface FallbackOptions {
    *   3. `gatewayToken` is set.
    *
    * On an active BYOK step the provider credential is omitted (`x-api-key`,
-   * `Authorization`, or Google's `?key=`). Direct-provider steps still require
+   * `Authorization`, or Google's `x-goog-api-key`). Direct-provider steps still require
    * and send their normal provider key, including gateway-bypassing fallbacks
    * such as zai-glm. This prevents BYOK from weakening direct-call auth.
    *

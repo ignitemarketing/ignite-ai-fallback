@@ -310,19 +310,19 @@ describe('Google adapter — buildGoogleRequest', () => {
     assert.throws(() => buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', '   ', BASE), /non-empty string/);
   });
 
-  it('builds URL with model path and ?key= query param', () => {
-    const { url } = buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', 'gkey', BASE);
-    assert.ok(url.includes('/v1beta/models/gemini-2.5-flash:generateContent'), `URL: ${url}`);
-    assert.ok(url.includes('?key=gkey'), `URL: ${url}`);
-    assert.ok(!url.includes('Authorization'), 'key should be in query param, not header');
-  });
-
-  it('uses CF gateway base URL when provided', () => {
-    const gwBase = 'https://gateway.ai.cloudflare.com/v1/a/b/google-ai-studio';
-    const { url } = buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', 'gkey', gwBase);
-    assert.ok(url.startsWith(gwBase), `URL: ${url}`);
-    assert.ok(url.includes(':generateContent'), `URL: ${url}`);
-  });
+  for (const [route, base] of [
+    ['direct', BASE],
+    ['gateway', 'https://gateway.ai.cloudflare.com/v1/a/b/google-ai-studio'],
+  ]) {
+    it(`sends the API key only in the x-goog-api-key header for ${route} calls`, () => {
+      const { url, init } = buildGoogleRequest(SIMPLE, 'gemini-2.5-flash', 'gkey', base);
+      assert.equal(url.includes('key='), false);
+      assert.equal(url, `${base}/v1beta/models/gemini-2.5-flash:generateContent`);
+      assert.equal(init.headers['x-goog-api-key'], 'gkey');
+      assert.equal(init.headers['Content-Type'], 'application/json');
+      assert.equal(init.method, 'POST');
+    });
+  }
 
   it('maps assistant role to "model"', () => {
     const req = {
